@@ -5,8 +5,8 @@ languages:
 products:
 - azure
 extensions:
-- services: Cosmos-DB
-- platforms: dotnet
+  services: Cosmos-DB
+  platforms: dotnet
 ---
 
 # Create a CosmosDB and configure it for high availability using C# #
