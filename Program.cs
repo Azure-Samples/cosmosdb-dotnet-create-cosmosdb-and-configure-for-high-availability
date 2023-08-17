@@ -20,20 +20,16 @@ namespace HACosmosDB
         private const int _maxStalenessPrefix = 100000;
         private const int _maxIntervalInSeconds = 300;
 
-        const String DATABASE_ID = "TestDB";
-        const String COLLECTION_ID = "TestCollection";
-
         /**
          * Azure CosmosDB sample -
          *  - Create a CosmosDB configured with a single read location
          *  - Get the credentials for the CosmosDB
          *  - Update the CosmosDB with additional read locations
-         *  - add collection to the CosmosDB with throughput 4000
          *  - Delete the CosmosDB
          */
         public static async Task RunSample(ArmClient client)
         {
-            //try
+            try
             {
                 // Get default subscription
                 SubscriptionResource subscription = await client.GetDefaultSubscriptionAsync();
@@ -50,7 +46,7 @@ namespace HACosmosDB
                 //============================================================
                 // Create a CosmosDB.
 
-                Console.WriteLine("Creating a CosmosDB...");
+                Utilities.Log("Creating a CosmosDB...");
                 string dbAccountName = Utilities.CreateRandomName("dbaccount");
                 CosmosDBAccountKind cosmosDBKind = CosmosDBAccountKind.GlobalDocumentDB;
                 var locations = new List<CosmosDBAccountLocation>()
@@ -81,20 +77,19 @@ namespace HACosmosDB
 
                 dbAccountInput.Tags.Add("key1", "value");
                 dbAccountInput.Tags.Add("key2", "value");
-                //var accountLro = await resourceGroup.GetCosmosDBAccounts().CreateOrUpdateAsync(WaitUntil.Completed, dbAccountName, dbAccountInput);
-                var accountLro = await resourceGroup.GetCosmosDBAccounts().GetAsync("dbaccount6183");
+                var accountLro = await resourceGroup.GetCosmosDBAccounts().CreateOrUpdateAsync(WaitUntil.Completed, dbAccountName, dbAccountInput);
                 CosmosDBAccountResource dbAccount = accountLro.Value;
 
-                Console.WriteLine(dbAccount.Data.FailoverPolicies.Count);
+                Utilities.Log(dbAccount.Data.FailoverPolicies.Count);
                 foreach (var item in dbAccount.Data.FailoverPolicies)
                 {
                     await Console.Out.WriteLineAsync(item.LocationName + "-" + item.FailoverPriority);
                 }
-                Console.WriteLine("Created CosmosDB");
+                Utilities.Log("Created CosmosDB");
 
                 //============================================================
                 // Update document db with three additional read regions
-                Console.WriteLine("Updating CosmosDB with three additional read replication regions");
+                Utilities.Log("Updating CosmosDB with three additional read replication regions");
                 var updataInput = new CosmosDBAccountPatch()
                 {
                     Locations =
@@ -105,94 +100,52 @@ namespace HACosmosDB
                         new CosmosDBAccountLocation() { LocationName = AzureLocation.SouthAfricaNorth, FailoverPriority = 3 }
                     }
                 };
-                //var updateResponse  = await dbAccount.UpdateAsync(WaitUntil.Completed, updataInput);
-                //CosmosDBAccountResource updatedDBAccount = updateResponse.Value;
+                var updateResponse = await dbAccount.UpdateAsync(WaitUntil.Completed, updataInput);
+                CosmosDBAccountResource updatedDBAccount = updateResponse.Value;
                 Utilities.Log("Updated CosmosDB");
 
                 //============================================================
                 // Get credentials for the CosmosDB.
 
-                Console.WriteLine("Get credentials for the CosmosDB");
+                Utilities.Log("Get credentials for the CosmosDB");
                 var getKeysLro = await dbAccount.GetKeysAsync();
                 CosmosDBAccountKeyList keyList = getKeysLro.Value;
                 string masterKey = keyList.PrimaryMasterKey;
-                //string endPoint = cosmosDBAccount.DocumentEndpoint;
+                Utilities.Log($"masterKey: {masterKey}");
 
                 //============================================================
-                // Connect to CosmosDB and add a collection
-
-                Console.WriteLine("Connecting and adding collection");
-                //CreateDBAndAddCollection(masterKey, endPoint);
-
-                ////============================================================
-                //// Delete CosmosDB
-                //Console.WriteLine("Deleting the CosmosDB");
-                //work around CosmosDB service issue returning 404 CloudException on delete operation
-                //try
-                //{
-                //    azure.CosmosDBAccounts.DeleteById(cosmosDBAccount.Id);
-                //}
-                //catch (CloudException)
-                //{
-                //}
-                //Console.WriteLine("Deleted the CosmosDB");
-            }
-            //finally
-            //{
-            //    try
-            //    {
-            //        if (_resourceGroupId is not null)
-            //        {
-            //            Console.WriteLine($"Deleting Resource Group: {_resourceGroupId}");
-            //            await client.GetResourceGroupResource(_resourceGroupId).DeleteAsync(WaitUntil.Completed);
-            //            Console.WriteLine($"Deleted Resource Group: {_resourceGroupId}");
-            //        }
-            //    }
-            //    catch (NullReferenceException)
-            //    {
-            //        Utilities.Log("Did not create any resources in Azure. No clean up is necessary");
-            //    }
-            //    catch (Exception e)
-            //    {
-            //        Utilities.Log(e.StackTrace);
-            //    }
-            //}
-        }
-
-        protected static async Task<CosmosDBAccountResource> CreateDatabaseAccount(ResourceGroupResource resourceGroup, CosmosDBAccountKind kind, string dbAccountName)
-        {
-            var locations = new List<CosmosDBAccountLocation>()
-            {
-                new CosmosDBAccountLocation(){ LocationName  = AzureLocation.NorthEurope, FailoverPriority = 0 },
-                new CosmosDBAccountLocation(){ LocationName  = AzureLocation.SoutheastAsia, FailoverPriority = 1 },
-                new CosmosDBAccountLocation(){ LocationName  = AzureLocation.UKSouth, FailoverPriority = 2 },
-            };
-            var dbAccountInput = new CosmosDBAccountCreateOrUpdateContent(AzureLocation.WestUS2, locations)
-            {
-                Kind = kind,
-                ConsistencyPolicy = new ConsistencyPolicy(DefaultConsistencyLevel.BoundedStaleness)
+                // Delete CosmosDB
+                Utilities.Log("Deleting the CosmosDB");
+                try
                 {
-                    MaxStalenessPrefix = _maxStalenessPrefix,
-                    MaxIntervalInSeconds = _maxIntervalInSeconds
-                },
-                IPRules =
+                    await dbAccount.DeleteAsync(WaitUntil.Completed);
+                }
+                catch (Exception ex)
+                {
+                    Utilities.Log(ex.ToString());
+                }
+                Utilities.Log("Deleted the CosmosDB");
+            }
+            finally
+            {
+                try
+                {
+                    if (_resourceGroupId is not null)
                     {
-                        new CosmosDBIPAddressOrRange()
-                        {
-                            IPAddressOrRange = "23.43.235.120"
-                        }
-                    },
-                IsVirtualNetworkFilterEnabled = true,
-                EnableAutomaticFailover = false,
-                ConnectorOffer = ConnectorOffer.Small,
-                DisableKeyBasedMetadataWriteAccess = false,
-                EnableMultipleWriteLocations = true,
-            };
-
-            dbAccountInput.Tags.Add("key1", "value");
-            dbAccountInput.Tags.Add("key2", "value");
-            var accountLro = await resourceGroup.GetCosmosDBAccounts().CreateOrUpdateAsync(WaitUntil.Completed, dbAccountName, dbAccountInput);
-            return accountLro.Value;
+                        Utilities.Log($"Deleting Resource Group: {_resourceGroupId}");
+                        await client.GetResourceGroupResource(_resourceGroupId).DeleteAsync(WaitUntil.Completed);
+                        Utilities.Log($"Deleted Resource Group: {_resourceGroupId}");
+                    }
+                }
+                catch (NullReferenceException)
+                {
+                    Utilities.Log("Did not create any resources in Azure. No clean up is necessary");
+                }
+                catch (Exception e)
+                {
+                    Utilities.Log(e.StackTrace);
+                }
+            }
         }
 
         public static async Task Main(string[] args)
