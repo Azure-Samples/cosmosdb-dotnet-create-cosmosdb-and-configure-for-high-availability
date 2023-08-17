@@ -16,8 +16,10 @@ namespace HACosmosDB
 {
     public class Program
     {
+        private static ResourceIdentifier? _resourceGroupId = null; 
         private const int _maxStalenessPrefix = 100000;
         private const int _maxIntervalInSeconds = 300;
+
         const String DATABASE_ID = "TestDB";
         const String COLLECTION_ID = "TestCollection";
 
@@ -31,22 +33,20 @@ namespace HACosmosDB
          */
         public static async Task RunSample(ArmClient client)
         {
-            // Get default subscription
-            SubscriptionResource subscription = await client.GetDefaultSubscriptionAsync();
-
-            // Create a resource group in the EastUS region
-            string rgName = Utilities.CreateRandomName("CosmosDBTemplateRG");
-            rgName = "CosmosDBTemplateRG0000";
-            Utilities.Log($"creating resource group with name:{rgName}");
-            ArmOperation<ResourceGroupResource> rgLro = await subscription.GetResourceGroups().CreateOrUpdateAsync(WaitUntil.Completed, rgName, new ResourceGroupData(AzureLocation.EastUS));
-            ResourceGroupResource resourceGroup = rgLro.Value;
-            Utilities.Log("Created a resource group with name: " + resourceGroup.Data.Name);
-
-            //var dbAccountLro = await rg.GetCosmosDBAccounts().GetAsync("dbaccount2554");
-            //var dbAccount = dbAccountLro.Value;
-
             //try
             {
+                // Get default subscription
+                SubscriptionResource subscription = await client.GetDefaultSubscriptionAsync();
+
+                // Create a resource group in the EastUS region
+                string rgName = Utilities.CreateRandomName("CosmosDBTemplateRG");
+                rgName = "CosmosDBTemplateRG0000";
+                Utilities.Log($"creating resource group with name:{rgName}");
+                ArmOperation<ResourceGroupResource> rgLro = await subscription.GetResourceGroups().CreateOrUpdateAsync(WaitUntil.Completed, rgName, new ResourceGroupData(AzureLocation.EastUS));
+                ResourceGroupResource resourceGroup = rgLro.Value;
+                _resourceGroupId = resourceGroup.Id;
+                Utilities.Log("Created a resource group with name: " + resourceGroup.Data.Name);
+
                 //============================================================
                 // Create a CosmosDB.
 
@@ -55,10 +55,7 @@ namespace HACosmosDB
                 CosmosDBAccountKind cosmosDBKind = CosmosDBAccountKind.GlobalDocumentDB;
                 var locations = new List<CosmosDBAccountLocation>()
                 {
-                    new CosmosDBAccountLocation(){ LocationName  = AzureLocation.EastUS2, FailoverPriority = 0 },
-                    new CosmosDBAccountLocation(){ LocationName  = AzureLocation.SoutheastAsia, FailoverPriority = 1 },
-                    //new CosmosDBAccountLocation(){ LocationName  = AzureLocation.NorthEurope, FailoverPriority = 2 },
-                    //new CosmosDBAccountLocation(){ LocationName  = AzureLocation.UKSouth, FailoverPriority = 3 },
+                    new CosmosDBAccountLocation(){ LocationName  = AzureLocation.EastUS, FailoverPriority = 0 },
                 };
                 var dbAccountInput = new CosmosDBAccountCreateOrUpdateContent(AzureLocation.WestUS2, locations)
                 {
@@ -93,54 +90,38 @@ namespace HACosmosDB
                 {
                     await Console.Out.WriteLineAsync(item.LocationName + "-" + item.FailoverPriority);
                 }
-                Console.WriteLine("");
                 Console.WriteLine("Created CosmosDB");
 
                 //============================================================
                 // Update document db with three additional read regions
-                {
-                    #region update failover policies [works]
-                    //List<CosmosDBFailoverPolicy> policyList = new List<CosmosDBFailoverPolicy>()
-                    //{
-                    //    new CosmosDBFailoverPolicy(){ LocationName  = AzureLocation.EastUS2, FailoverPriority = 1 },
-                    //    new CosmosDBFailoverPolicy(){ LocationName  = AzureLocation.SoutheastAsia, FailoverPriority = 0 },
-                    //    //new CosmosDBFailoverPolicy(){ LocationName  = AzureLocation.NorthEurope, FailoverPriority = 2 },
-                    //    //new CosmosDBFailoverPolicy(){ LocationName  = AzureLocation.UKSouth, FailoverPriority = 3 },
-                    //};
-                    //CosmosDBFailoverPolicies policyInput = new CosmosDBFailoverPolicies(policyList);
-                    //await dbAccount.FailoverPriorityChangeAsync(WaitUntil.Completed, policyInput);
-                    //Console.WriteLine("Updated CosmosDB");
-                    #endregion
-                }
-
-
-
-
                 Console.WriteLine("Updating CosmosDB with three additional read replication regions");
                 var updataInput = new CosmosDBAccountPatch()
                 {
+                    Locations =
+                    {
+                        new CosmosDBAccountLocation() { LocationName = AzureLocation.EastUS, FailoverPriority = 0 },
+                        new CosmosDBAccountLocation() { LocationName = AzureLocation.EastAsia, FailoverPriority = 1 },
+                        new CosmosDBAccountLocation() { LocationName = AzureLocation.UKSouth, FailoverPriority = 2 },
+                        new CosmosDBAccountLocation() { LocationName = AzureLocation.SouthAfricaNorth, FailoverPriority = 3 }
+                    }
                 };
-                updataInput.Locations.Add(new CosmosDBAccountLocation() { LocationName = AzureLocation.EastUS2, FailoverPriority = 0 });
-                updataInput.Locations.Add(new CosmosDBAccountLocation() { LocationName = AzureLocation.SoutheastAsia, FailoverPriority = 1 });
-                updataInput.Locations.Add(new CosmosDBAccountLocation() { LocationName = AzureLocation.KoreaCentral, FailoverPriority = 2 });
-                //updataInput.Locations.Add(new CosmosDBAccountLocation() { LocationName = AzureLocation.UKSouth, FailoverPriority = 3 });
-                await dbAccount.UpdateAsync(WaitUntil.Completed, updataInput);
-
-                Console.WriteLine("Updated CosmosDB");
-                Utilities.Log(dbAccount);
+                //var updateResponse  = await dbAccount.UpdateAsync(WaitUntil.Completed, updataInput);
+                //CosmosDBAccountResource updatedDBAccount = updateResponse.Value;
+                Utilities.Log("Updated CosmosDB");
 
                 //============================================================
                 // Get credentials for the CosmosDB.
 
-                //Console.WriteLine("Get credentials for the CosmosDB");
-                //var databaseAccountListKeysResult = cosmosDBAccount.ListKeys();
-                //string masterKey = databaseAccountListKeysResult.PrimaryMasterKey;
+                Console.WriteLine("Get credentials for the CosmosDB");
+                var getKeysLro = await dbAccount.GetKeysAsync();
+                CosmosDBAccountKeyList keyList = getKeysLro.Value;
+                string masterKey = keyList.PrimaryMasterKey;
                 //string endPoint = cosmosDBAccount.DocumentEndpoint;
 
                 //============================================================
                 // Connect to CosmosDB and add a collection
 
-                //Console.WriteLine("Connecting and adding collection");
+                Console.WriteLine("Connecting and adding collection");
                 //CreateDBAndAddCollection(masterKey, endPoint);
 
                 ////============================================================
@@ -156,26 +137,25 @@ namespace HACosmosDB
                 //}
                 //Console.WriteLine("Deleted the CosmosDB");
             }
-            //catch (Exception ex)
-            //{
-            //    await Console.Out.WriteLineAsync(ex.ToString());
-            //}
             //finally
             //{
-            //try
-            //{
-            //    Utilities.Log("Deleting resource group: " + rgName);
-            //    azure.ResourceGroups.BeginDeleteByName(rgName);
-            //    Utilities.Log("Deleted resource group: " + rgName);
-            //}
-            //catch (NullReferenceException)
-            //{
-            //    Utilities.Log("Did not create any resources in Azure. No clean up is necessary");
-            //}
-            //catch (Exception e)
-            //{
-            //    Utilities.Log(e.StackTrace);
-            //}
+            //    try
+            //    {
+            //        if (_resourceGroupId is not null)
+            //        {
+            //            Console.WriteLine($"Deleting Resource Group: {_resourceGroupId}");
+            //            await client.GetResourceGroupResource(_resourceGroupId).DeleteAsync(WaitUntil.Completed);
+            //            Console.WriteLine($"Deleted Resource Group: {_resourceGroupId}");
+            //        }
+            //    }
+            //    catch (NullReferenceException)
+            //    {
+            //        Utilities.Log("Did not create any resources in Azure. No clean up is necessary");
+            //    }
+            //    catch (Exception e)
+            //    {
+            //        Utilities.Log(e.StackTrace);
+            //    }
             //}
         }
 
