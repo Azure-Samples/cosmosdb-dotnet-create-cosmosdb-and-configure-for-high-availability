@@ -36,7 +36,6 @@ namespace HACosmosDB
 
                 // Create a resource group in the EastUS region
                 string rgName = Utilities.CreateRandomName("CosmosDBTemplateRG");
-                rgName = "CosmosDBTemplateRG0000";
                 Utilities.Log($"creating resource group with name:{rgName}");
                 ArmOperation<ResourceGroupResource> rgLro = await subscription.GetResourceGroups().CreateOrUpdateAsync(WaitUntil.Completed, rgName, new ResourceGroupData(AzureLocation.EastUS));
                 ResourceGroupResource resourceGroup = rgLro.Value;
@@ -79,13 +78,16 @@ namespace HACosmosDB
                 dbAccountInput.Tags.Add("key2", "value");
                 var accountLro = await resourceGroup.GetCosmosDBAccounts().CreateOrUpdateAsync(WaitUntil.Completed, dbAccountName, dbAccountInput);
                 CosmosDBAccountResource dbAccount = accountLro.Value;
-
-                Utilities.Log(dbAccount.Data.FailoverPolicies.Count);
-                foreach (var item in dbAccount.Data.FailoverPolicies)
-                {
-                    await Console.Out.WriteLineAsync(item.LocationName + "-" + item.FailoverPriority);
-                }
                 Utilities.Log("Created CosmosDB");
+
+                //============================================================
+                // Get credentials for the CosmosDB.
+
+                Utilities.Log("Get credentials for the CosmosDB");
+                var getKeysLro = await dbAccount.GetKeysAsync();
+                CosmosDBAccountKeyList keyList = getKeysLro.Value;
+                string masterKey = keyList.PrimaryMasterKey;
+                Utilities.Log($"masterKey: {masterKey}");
 
                 //============================================================
                 // Update document db with three additional read regions
@@ -103,15 +105,6 @@ namespace HACosmosDB
                 var updateResponse = await dbAccount.UpdateAsync(WaitUntil.Completed, updataInput);
                 CosmosDBAccountResource updatedDBAccount = updateResponse.Value;
                 Utilities.Log("Updated CosmosDB");
-
-                //============================================================
-                // Get credentials for the CosmosDB.
-
-                Utilities.Log("Get credentials for the CosmosDB");
-                var getKeysLro = await dbAccount.GetKeysAsync();
-                CosmosDBAccountKeyList keyList = getKeysLro.Value;
-                string masterKey = keyList.PrimaryMasterKey;
-                Utilities.Log($"masterKey: {masterKey}");
 
                 //============================================================
                 // Delete CosmosDB
@@ -150,19 +143,18 @@ namespace HACosmosDB
 
         public static async Task Main(string[] args)
         {
-            //=================================================================
-            // Authenticate
-            var clientId = Environment.GetEnvironmentVariable("CLIENT_ID");
-            var clientSecret = Environment.GetEnvironmentVariable("CLIENT_SECRET");
-            var tenantId = Environment.GetEnvironmentVariable("TENANT_ID");
-            var subscription = Environment.GetEnvironmentVariable("SUBSCRIPTION_ID");
-            ClientSecretCredential credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-            ArmClient client = new ArmClient(credential, subscription);
-
-            await RunSample(client);
             try
             {
+                //=================================================================
+                // Authenticate
+                var clientId = Environment.GetEnvironmentVariable("CLIENT_ID");
+                var clientSecret = Environment.GetEnvironmentVariable("CLIENT_SECRET");
+                var tenantId = Environment.GetEnvironmentVariable("TENANT_ID");
+                var subscription = Environment.GetEnvironmentVariable("SUBSCRIPTION_ID");
+                ClientSecretCredential credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+                ArmClient client = new ArmClient(credential, subscription);
 
+                await RunSample(client);
             }
             catch (Exception e)
             {
