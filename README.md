@@ -15,6 +15,7 @@ extensions:
   - Create a CosmosDB configured with a single read location
   - Get the credentials for the CosmosDB
   - Update the CosmosDB with additional read locations
+  - add collection to the CosmosDB with throughput 4000
   - Delete the CosmosDB
 
 
@@ -22,7 +23,7 @@ extensions:
 
 To run this sample:
 
-Set the environment variable `CLIENT_ID`,`CLIENT_SECRET`,`TENANT_ID`,`SUBSCRIPTION_ID` with the full path for an auth file. See [how to create an auth file](https://github.com/Azure/azure-libraries-for-net/blob/master/AUTH.md).
+Set the environment variable `CLIENT_ID`,`CLIENT_SECRET`,`TENANT_ID`,`SUBSCRIPTION_ID`,`Current_Machine_PublicIP` with the full path for an auth file. See [how to create an auth file](https://github.com/Azure/azure-libraries-for-net/blob/master/AUTH.md).
 
     git clone https://github.com/Azure-Samples/cosmosdb-dotnet-create-cosmosdb-and-configure-for-high-availability.git
 

@@ -11,6 +11,8 @@ using Azure.ResourceManager;
 using Azure.ResourceManager.CosmosDB;
 using Azure.ResourceManager.CosmosDB.Models;
 using System.Reflection;
+using Microsoft.Azure.Documents.Client;
+using Microsoft.Azure.Documents;
 
 namespace HACosmosDB
 {
@@ -19,6 +21,8 @@ namespace HACosmosDB
         private static ResourceIdentifier? _resourceGroupId = null; 
         private const int _maxStalenessPrefix = 100000;
         private const int _maxIntervalInSeconds = 300;
+        const String DATABASE_ID = "TestDB";
+        const String COLLECTION_ID = "TestCollection";
 
         /**
          * Azure CosmosDB sample -
@@ -55,7 +59,7 @@ namespace HACosmosDB
                 var dbAccountInput = new CosmosDBAccountCreateOrUpdateContent(AzureLocation.WestUS2, locations)
                 {
                     Kind = cosmosDBKind,
-                    ConsistencyPolicy = new ConsistencyPolicy(DefaultConsistencyLevel.BoundedStaleness)
+                    ConsistencyPolicy = new Azure.ResourceManager.CosmosDB.Models.ConsistencyPolicy(DefaultConsistencyLevel.BoundedStaleness)
                     {
                         MaxStalenessPrefix = _maxStalenessPrefix,
                         MaxIntervalInSeconds = _maxIntervalInSeconds
@@ -64,7 +68,7 @@ namespace HACosmosDB
                     {
                         new CosmosDBIPAddressOrRange()
                         {
-                            IPAddressOrRange = "23.43.235.120"
+                            IPAddressOrRange = Environment.GetEnvironmentVariable("Current_Machine_PublicIP")
                         }
                     },
                     IsVirtualNetworkFilterEnabled = true,
@@ -78,7 +82,7 @@ namespace HACosmosDB
                 dbAccountInput.Tags.Add("key2", "value");
                 var accountLro = await resourceGroup.GetCosmosDBAccounts().CreateOrUpdateAsync(WaitUntil.Completed, dbAccountName, dbAccountInput);
                 CosmosDBAccountResource dbAccount = accountLro.Value;
-                Utilities.Log("Created CosmosDB");
+                Utilities.Log($"Created CosmosDB {dbAccount.Id.Name}");
 
                 //============================================================
                 // Get credentials for the CosmosDB.
@@ -87,7 +91,9 @@ namespace HACosmosDB
                 var getKeysLro = await dbAccount.GetKeysAsync();
                 CosmosDBAccountKeyList keyList = getKeysLro.Value;
                 string masterKey = keyList.PrimaryMasterKey;
+                string endPoint = dbAccount.Data.DocumentEndpoint;
                 Utilities.Log($"masterKey: {masterKey}");
+                Utilities.Log($"endPoint: {endPoint}");
 
                 //============================================================
                 // Update document db with three additional read regions
@@ -105,6 +111,12 @@ namespace HACosmosDB
                 var updateResponse = await dbAccount.UpdateAsync(WaitUntil.Completed, updataInput);
                 CosmosDBAccountResource updatedDBAccount = updateResponse.Value;
                 Utilities.Log("Updated CosmosDB");
+
+                //============================================================
+                // Connect to CosmosDB and add a collection
+
+                Console.WriteLine("Connecting and adding collection");
+                CreateDBAndAddCollection(masterKey, endPoint);
 
                 //============================================================
                 // Delete CosmosDB
@@ -139,6 +151,36 @@ namespace HACosmosDB
                     Utilities.Log(e.StackTrace);
                 }
             }
+        }
+
+        private static void CreateDBAndAddCollection(string masterKey, string endPoint)
+        {
+            DocumentClient documentClient = new DocumentClient(new System.Uri(endPoint),
+                    masterKey, ConnectionPolicy.Default,
+                    ConsistencyLevel.Session);
+
+            // Define a new database using the id above.
+            Database myDatabase = new Database();
+            myDatabase.Id = DATABASE_ID;
+
+            myDatabase = documentClient.CreateDatabaseAsync(myDatabase, null)
+                    .GetAwaiter().GetResult();
+
+            Console.WriteLine("Created a new database:");
+            Console.WriteLine(myDatabase.ToString());
+
+            // Define a new collection using the id above.
+            DocumentCollection myCollection = new DocumentCollection();
+            myCollection.Id = COLLECTION_ID;
+
+            // Set the provisioned throughput for this collection to be 1000 RUs.
+            RequestOptions requestOptions = new RequestOptions();
+            requestOptions.OfferThroughput = 4000;
+
+            // Create a new collection.
+            myCollection = documentClient.CreateDocumentCollectionAsync(
+                    "dbs/" + DATABASE_ID, myCollection, requestOptions)
+                    .GetAwaiter().GetResult();
         }
 
         public static async Task Main(string[] args)
