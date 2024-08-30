@@ -22,9 +22,12 @@ namespace Azure.ResourceManager.Samples.Common
             ProjectPath = ".";
         }
 
-        public static void Log(string message)
+        public static void Log(string? message)
         {
-            LoggerMethod.Invoke(message);
+            if (message != null)
+            {
+                LoggerMethod.Invoke(message);
+            }
         }
 
         public static void Log(object obj)
